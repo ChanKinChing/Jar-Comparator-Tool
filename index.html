@@ -289,7 +289,7 @@ function updateZone(side, files) {
     detail.textContent = dirSummary;
     const parts = paths[0].split('/');
     if (parts.length > 1) {
-      if (folderHint) folderHint.textContent = '📂 .\\' + paths[0].substring(0, paths[0].lastIndexOf('/'));
+      if (folderHint) folderHint.textContent = '📂 ./' + paths[0].substring(0, paths[0].lastIndexOf('/'));
     } else if (folderHint) {
       folderHint.textContent = '📂 (根目錄)';
     }
@@ -499,7 +499,7 @@ function buildCard(r, idx, offset) {
   };
   const folderA = r.pathA ? r.pathA.replace(/\/[^/]+$/, '') : '';
   const folderB = r.pathB ? r.pathB.replace(/\/[^/]+$/, '') : '';
-  const pathHint = r.pathA ? '.\\' + r.pathA : (r.pathB ? '.\\' + r.pathB : '');
+  const pathHint = r.pathA ? './' + r.pathA : (r.pathB ? './' + r.pathB : '');
   const highlight = r.status === 'different' ? ' card-highlight' : '';
   const realIdx = (offset || 0) + idx;
 
