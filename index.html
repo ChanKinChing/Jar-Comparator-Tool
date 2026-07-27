@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jar Comparator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0d1117; --bg-card: #161b22; --bg-hover: #1c2333;
+  --border: #30363d; --text: #e6edf3; --text-dim: #8b949e;
+  --accent: #58a6ff; --green: #3fb950; --red: #f85149; --yellow: #d29922;
+  --blue: #58a6ff; --radius: 8px;
+}
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Noto Sans TC, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
+#app { max-width: 1600px; margin: 0 auto; padding: 24px 32px; flex: 1; width: 95%; }
+
+/* Light Mode */
+html.light { --bg: #ffffff; --bg-card: #f3f4f6; --bg-hover: #e5e7eb; --border: #d1d5db; --text: #1f2937; --text-dim: #6b7280; --accent: #2563eb; --green: #16a34a; --red: #dc2626; --yellow: #ca8a04; --blue: #2563eb; }
+html.light .diff-summary th { background: #f3f4f6; }
+html.light .content-header { background: #f3f4f6; }
+html.light .status-identical { background: #dcfce7; color: var(--green); }
+html.light .status-different { background: #fef9c3; color: var(--yellow); }
+html.light .status-only-a { background: #fee2e2; color: var(--red); }
+html.light .status-only-b { background: #dbeafe; color: var(--blue); }
+html.light ::-webkit-scrollbar-track { background: var(--bg); }
+html.light ::-webkit-scrollbar-thumb { background: var(--border); }
+html.light .diff-summary tr.diff-row td { background: rgba(220, 38, 38, 0.1); }
+html.light .cl-row.cl-modified { background: rgba(220, 38, 38, 0.15); }
+html.light .folder-zone { background: var(--bg-card); }
+html.light ::-webkit-scrollbar-thumb:hover { background: #c1c5cb; }
+html.light #summary-bar { background: var(--bg-card); }
+
+/* Header */
+header { margin-bottom: 28px; }
+header h1 { font-size: 24px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+header h1 span { background: var(--accent); color: #fff; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 10px; }
+header p { color: var(--text-dim); font-size: 14px; margin-top: 4px; }
+
+/* Upload Section */
+#upload-section { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
+.folder-zone {
+  display: block; flex: 1; min-width: 280px; border: 2px dashed var(--border); border-radius: var(--radius);
+  padding: 32px 20px; text-align: center; cursor: pointer; transition: all .2s;
+  background: var(--bg-card); position: relative;
+}
+.folder-zone:hover { border-color: var(--accent); background: var(--bg-hover); }
+.folder-zone.has-files { border-color: var(--green); border-style: solid; }
+.folder-zone-label { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+.folder-zone-label .badge { display: inline-block; background: var(--border); padding: 1px 8px; border-radius: 8px; font-size: 11px; margin-left: 6px; }
+.folder-zone-hint { font-size: 12px; color: var(--text-dim); }
+.folder-zone .file-count { font-size: 28px; font-weight: 700; margin: 12px 0 4px; }
+.folder-zone .file-detail { font-size: 12px; color: var(--text-dim); }
+.folder-zone .folder-path { font-size: 11px; color: var(--accent); margin-top: 4px; font-weight: 500; }
+.folder-zone .icon-folder { font-size: 32px; margin-bottom: 8px; opacity: .5; }
+
+#controls { display: flex; align-items: center; gap: 12px; width: 100%; margin-top: 4px; }
+#compare-btn {
+  padding: 10px 32px; background: var(--accent); color: #fff; border: none; border-radius: var(--radius);
+  font-size: 15px; font-weight: 600; cursor: pointer; transition: all .2s; opacity: .5;
+}
+#compare-btn:not(:disabled) { opacity: 1; }
+#compare-btn:not(:disabled):hover { filter: brightness(1.15); transform: translateY(-1px); }
+#compare-btn:disabled { cursor: not-allowed; }
+#compare-btn.loading { pointer-events: none; opacity: .7; }
+#progress-text { font-size: 13px; color: var(--text-dim); }
+
+/* Results Section */
+#results-section { display: none; }
+#results-section.visible { display: block; }
+
+/* Summary */
+#summary-bar {
+  display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; padding: 16px 20px;
+  background: var(--bg-card); border-radius: var(--radius); border: 1px solid var(--border);
+}
+.summary-item { text-align: center; padding: 0 16px; border-right: 1px solid var(--border); flex: 1; min-width: 80px; }
+.summary-item:last-child { border-right: none; }
+.summary-item .num { font-size: 22px; font-weight: 700; }
+.summary-item .lbl { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+.summary-item .num.green { color: var(--green); }
+.summary-item .num.red { color: var(--red); }
+.summary-item .num.yellow { color: var(--yellow); }
+.summary-item .num.blue { color: var(--blue); }
+
+/* Filter */
+#filter-bar { display: flex; gap: 10px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+#filter-bar input, #filter-bar select {
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 6px 12px; color: var(--text); font-size: 13px; outline: none;
+}
+#filter-bar input:focus, #filter-bar select:focus { border-color: var(--accent); }
+#filter-bar input { flex: 1; min-width: 180px; }
+#filter-bar label { font-size: 13px; color: var(--text-dim); }
+#filter-bar .btn-sm {
+  padding: 6px 14px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius);
+  color: var(--text); font-size: 12px; cursor: pointer; transition: all .15s;
+}
+#filter-bar .btn-sm:hover { border-color: var(--accent); color: var(--accent); }
+
+/* Jar List */
+#jar-list { display: flex; flex-direction: column; gap: 8px; }
+.jar-card {
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius);
+  overflow: hidden; transition: border-color .2s;
+}
+.jar-card:hover { border-color: #484f58; }
+.jar-card-header {
+  display: flex; align-items: center; gap: 12px; padding: 12px 16px; cursor: pointer;
+  user-select: none; transition: background .15s;
+}
+.jar-card-header:hover { background: var(--bg-hover); }
+.jar-card-header .name { font-weight: 600; font-size: 14px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jar-card-header .path-hint { font-size: 11px; color: var(--text-dim); margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 35%; min-width: 80px; }
+.jar-card-header .status-badge {
+  font-size: 11px; font-weight: 600; padding: 2px 10px; border-radius: 10px; white-space: nowrap;
+}
+.status-identical { background: #1a3a2a; color: var(--green); }
+.status-different { background: #3a2a1a; color: var(--yellow); }
+.status-only-a { background: #3a1a1a; color: var(--red); }
+.status-only-b { background: #1a2a3a; color: var(--blue); }
+
+.jar-card-body { display: none; border-top: 1px solid var(--border); }
+.jar-card-body.open { display: block; }
+
+/* Empty state */
+.empty-state { text-align: center; padding: 48px 20px; color: var(--text-dim); }
+.empty-state .big-icon { font-size: 48px; margin-bottom: 12px; opacity: .4; }
+
+/* Footer */
+footer { text-align: center; padding: 20px; color: var(--text-dim); font-size: 12px; border-top: 1px solid var(--border); margin-top: 40px; }
+
+/* Toast */
+#toast {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 10px 20px; font-size: 13px; z-index: 999; opacity: 0; pointer-events: none;
+  transition: opacity .3s; max-width: 90vw;
+}
+#toast.show { opacity: 1; pointer-events: auto; }
+#toast.error { border-color: var(--red); }
+#toast.success { border-color: var(--green); }
+
+/* Loading spinner */
+.spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .6s linear infinite; vertical-align: middle; margin-right: 6px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Content Diff */
+.content-diff { display: flex; gap: 0; border-top: 1px solid var(--border); }
+.content-side { flex: 1; min-width: 0; width: 50%; }
+.content-side:first-child { border-right: 1px solid var(--border); }
+.content-header { padding: 6px 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; background: #0d1117; border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 1; }
+.content-lines { font-family: 'SF Mono', Consolas, monospace; font-size: 12px; max-height: 500px; overflow-y: auto; }
+.cl-row { display: flex; min-height: 22px; }
+.cl-row.cl-same { background: transparent; }
+.cl-row.cl-modified { background: rgba(248, 81, 73, 0.25); }
+.cl-num { width: 36px; text-align: right; color: var(--text-dim); padding: 2px 6px; user-select: none; border-right: 1px solid var(--border); flex-shrink: 0; font-size: 11px; }
+.cl-text { padding: 2px 8px; white-space: pre; overflow-x: auto; flex: 1; min-width: 0; }
+.content-toggle { cursor: pointer; font-size: 11px; color: var(--accent); margin-left: 8px; text-decoration: none; }
+.content-toggle:hover { text-decoration: underline; }
+
+/* Diff Summary */
+.diff-summary { width: 100%; border-collapse: collapse; font-size: 13px; }
+.diff-summary th { padding: 6px 12px; text-align: left; font-weight: 600; font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .5px; background: #0d1117; border-bottom: 1px solid var(--border); }
+.diff-summary td { padding: 4px 12px; border-bottom: 1px solid #1c2333; font-family: 'SF Mono', Consolas, monospace; font-size: 12px; }
+.diff-summary tr.diff-row td { background: rgba(248, 81, 73, 0.15); }
+.diff-summary .col-dash { color: var(--text-dim); text-align: center; }
+.content-entry-header { padding: 8px 12px 4px; font-size: 12px; font-weight: 600; color: var(--accent); margin-top: 8px; border-top: 1px solid var(--border); padding-top: 10px; cursor: pointer; user-select: none; }
+.content-entry-header:hover { color: var(--text); }
+
+/* Animations */
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+.jar-card { animation: fadeIn .3s ease; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #484f58; }
+
+/* Responsive */
+@media (max-width: 700px) {
+  #app { padding: 16px; }
+  #upload-section { flex-direction: column; }
+  .folder-zone { min-width: unset; }
+  .summary-item { padding: 0 8px; min-width: 60px; }
+  .summary-item .num { font-size: 18px; }
+}
+</style>
+</head>
+<body>
+<div id="app">
+
+<header>
+  <h1>&#x1F9F9; Jar Comparator <span>v1.0</span></h1>
+  <p>選取兩個資料夾，自動比對同名 jar 檔案的內部結構差異 <button id="theme-toggle" onclick="toggleTheme()" style="background:none;border:1px solid var(--border);border-radius:6px;color:var(--text-dim);cursor:pointer;font-size:12px;padding:2px 10px;margin-left:8px;" title="切換淺色/深色模式">☀️</button></p>
+</header>
+
+<section id="upload-section">
+  <label for="inputA" class="folder-zone" id="zoneA">
+    <div class="icon-folder">&#x1F4C1;</div>
+    <div class="folder-zone-label">資料夾 A <span class="badge">左側</span></div>
+    <div class="folder-zone-hint">按一下選擇資料夾，包含子目錄</div>
+    <div class="file-count" id="countA">0</div>
+    <div class="file-detail" id="detailA">jar 檔案</div>
+    <div class="folder-path" id="pathA"></div>
+  </label>
+  <input type="file" id="inputA" webkitdirectory multiple onchange="handleFolder(this, 'A')" style="display:none">
+
+  <label for="inputB" class="folder-zone" id="zoneB">
+    <div class="icon-folder">&#x1F4C1;</div>
+    <div class="folder-zone-label">資料夾 B <span class="badge">右側</span></div>
+    <div class="folder-zone-hint">按一下選擇資料夾，包含子目錄</div>
+    <div class="file-count" id="countB">0</div>
+    <div class="file-detail" id="detailB">jar 檔案</div>
+    <div class="folder-path" id="pathB"></div>
+  </label>
+  <input type="file" id="inputB" webkitdirectory multiple onchange="handleFolder(this, 'B')" style="display:none">
+  <div id="controls">
+    <button id="compare-btn" disabled onclick="startCompare()">&#x1F50D; 開始比對</button>
+    <button id="cancel-btn" style="display:none;padding:10px 20px;background:var(--red);color:#fff;border:none;border-radius:var(--radius);font-size:14px;font-weight:600;cursor:pointer;" onclick="cancelCompare()">&#x2716; 取消</button>
+    <span id="progress-text"></span>
+  </div>
+</section>
+
+<section id="results-section">
+  <div id="summary-bar"></div>
+  <div id="filter-bar">
+    <input type="text" id="filter-text" placeholder="搜尋 jar 檔名..." oninput="applyFilter()">
+    <select id="filter-status" onchange="applyFilter()">
+      <option value="all">全部</option>
+      <option value="different">僅有差異</option>
+      <option value="identical">僅完全相同</option>
+      <option value="only-a">僅資料夾 A</option>
+      <option value="only-b">僅資料夾 B</option>
+    </select>
+    <button class="btn-sm" onclick="expandAll(true)">全部展開</button>
+    <button class="btn-sm" onclick="expandAll(false)">全部收合</button>
+    <span id="filter-result" style="font-size:12px;color:var(--text-dim);margin-left:auto;"></span>
+  </div>
+  <div id="jar-list"></div>
+</section>
+
+<footer>Jar Comparator v1.0 &mdash; standalone HTML tool &mdash; 使用 <a href="https://stuk.github.io/jszip/" target="_blank" style="color:var(--accent);text-decoration:none;">JSZip</a></footer>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const state = { filesA: [], filesB: [], results: [], abort: null };
+
+// ─── Folder Selection ───────────────────────────────────
+function handleFolder(input, side) {
+  const files = Array.from(input.files).filter(f => f.name.endsWith('.jar') && !f.webkitRelativePath.includes('/.'));
+  state[side === 'A' ? 'filesA' : 'filesB'] = files;
+  updateZone(side, files);
+  updateCompareBtn();
+}
+
+function updateZone(side, files) {
+  const zone = document.getElementById('zone' + side);
+  const count = document.getElementById('count' + side);
+  const detail = document.getElementById('detail' + side);
+  const folderHint = document.querySelector('#zone' + side + ' .folder-path');
+  count.textContent = files.length;
+  if (files.length > 0) {
+    const paths = files.map(f => f.webkitRelativePath);
+    const dirs = [...new Set(paths.map(p => p.includes('/') ? p.substring(0, p.lastIndexOf('/')) : '(根目錄)'))];
+    const dirSummary = dirs.length > 3 ? `${dirs.slice(0, 3).join(', ')}, ...共 ${dirs.length} 個子目錄` : dirs.join(', ');
+    detail.textContent = dirSummary;
+    const parts = paths[0].split('/');
+    if (parts.length > 1) {
+      if (folderHint) folderHint.textContent = '📂 ' + parts[0] + (parts.length > 2 ? '/...' : '');
+    } else if (folderHint) {
+      folderHint.textContent = '📂 (根目錄)';
+    }
+  } else {
+    detail.textContent = 'jar 檔案';
+    if (folderHint) folderHint.textContent = '';
+  }
+  zone.classList.toggle('has-files', files.length > 0);
+}
+
+function updateCompareBtn() {
+  const btn = document.getElementById('compare-btn');
+  btn.disabled = state.filesA.length === 0 || state.filesB.length === 0;
+}
+
+// ─── Compare Logic ──────────────────────────────────────
+async function startCompare() {
+  const btn = document.getElementById('compare-btn');
+  const cancelBtn = document.getElementById('cancel-btn');
+  const progress = document.getElementById('progress-text');
+  state.abort = new AbortController();
+  const signal = state.abort.signal;
+  btn.style.display = 'none';
+  cancelBtn.style.display = '';
+  progress.innerHTML = '<span class="spinner"></span> 正在讀取 Jar 檔案...';
+
+  try {
+    const results = await compareAllJars(state.filesA, state.filesB, progress, signal);
+    if (signal.aborted) return;
+    progress.innerHTML = '<span class="spinner"></span> 正在讀取條目內容...';
+    await readModifiedContent(results, signal);
+    if (signal.aborted) return;
+    state.results = results;
+    renderResults(results);
+    document.getElementById('results-section').classList.add('visible');
+    showToast(`比對完成：${results.length} 組 Jar`, 'success');
+  } catch (err) {
+    if (err.name === 'AbortError' || signal.aborted) {
+      showToast('已取消比對', '');
+    } else {
+      showToast('比對過程發生錯誤：' + err.message, 'error');
+      console.error(err);
+    }
+  } finally {
+    btn.style.display = '';
+    cancelBtn.style.display = 'none';
+    btn.classList.remove('loading');
+    progress.textContent = '';
+    state.abort = null;
+  }
+}
+
+function cancelCompare() {
+  if (state.abort) {
+    state.abort.abort();
+    document.getElementById('progress-text').textContent = '取消中...';
+  }
+}
+
+async function compareAllJars(filesA, filesB, progressEl, signal) {
+  const groups = groupByFilename(filesA, filesB);
+  const results = [];
+  let done = 0;
+  const total = groups.length;
+  const batchSize = 5;
+
+  for (let i = 0; i < groups.length && !signal.aborted; i += batchSize) {
+    const batch = groups.slice(i, i + batchSize);
+    const batchResults = await Promise.all(batch.map(async (g) => {
+      const [entriesA, entriesB] = await Promise.all([
+        g.fileA ? readJarEntries(g.fileA) : Promise.resolve(null),
+        g.fileB ? readJarEntries(g.fileB) : Promise.resolve(null)
+      ]);
+      return computeDiff(g.filename, g.fileA, g.fileB, entriesA, entriesB, g.pathA, g.pathB);
+    }));
+    results.push(...batchResults);
+    done = Math.min(i + batchSize, total);
+    if (progressEl) {
+      progressEl.innerHTML = `<span class="spinner"></span> 比對中... ${done}/${total}`;
+    }
+  }
+
+  if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
+
+  results.sort((a, b) => {
+    const order = { 'different': 0, 'only-a': 1, 'only-b': 2, 'identical': 3 };
+    return (order[a.status] || 9) - (order[b.status] || 9) || a.filename.localeCompare(b.filename);
+  });
+  return results;
+}
+
+function groupByFilename(filesA, filesB) {
+  const map = {};
+  filesA.forEach(f => { const name = f.name; if (!map[name]) map[name] = {}; map[name].fileA = f; map[name].pathA = f.webkitRelativePath; });
+  filesB.forEach(f => { const name = f.name; if (!map[name]) map[name] = {}; map[name].fileB = f; map[name].pathB = f.webkitRelativePath; });
+  return Object.entries(map).map(([filename, v]) => ({ filename, ...v }));
+}
+
+function readJarEntries(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const zip = await JSZip.loadAsync(e.target.result);
+        const entries = [];
+        zip.forEach((relPath, zipEntry) => {
+          if (!zipEntry.dir) {
+            const d = zipEntry._data || {};
+            entries.push({
+              path: relPath,
+              size: zipEntry.uncompressedSize || d.uncompressedSize || 0,
+              compressedSize: zipEntry.compressedSize || d.compressedSize || 0,
+              crc32: (zipEntry.crc32 || d.crc32 || 0) >>> 0,
+              date: zipEntry.date
+            });
+          }
+        });
+        resolve(entries);
+      } catch (err) {
+        resolve([]); // treat unreadable jars as empty
+      }
+    };
+    reader.onerror = () => resolve([]);
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+function computeDiff(filename, fileA, fileB, entriesA, entriesB, pathA, pathB) {
+  if (!entriesA) return { filename, fileA, fileB, pathA: pathA || '', pathB: '', status: 'only-b', entriesA: [], entriesB: entriesB || [], diffEntries: (entriesB || []).map(e => ({ ...e, diff: 'added' })), sizeA: 0, sizeB: fileB ? fileB.size : 0 };
+  if (!entriesB) return { filename, fileA, fileB, pathA: pathA || '', pathB: pathB || '', status: 'only-a', entriesA, entriesB: [], diffEntries: entriesA.map(e => ({ ...e, diff: 'removed' })), sizeA: fileA ? fileA.size : 0, sizeB: 0 };
+
+  const mapA = new Map(entriesA.map(e => [e.path, e]));
+  const mapB = new Map(entriesB.map(e => [e.path, e]));
+  const allPaths = new Set([...entriesA.map(e => e.path), ...entriesB.map(e => e.path)]);
+  const diffEntries = [];
+
+  let hasDiff = false;
+  for (const p of allPaths) {
+    const a = mapA.get(p);
+    const b = mapB.get(p);
+    if (a && !b) { diffEntries.push({ ...a, diff: 'removed' }); hasDiff = true; }
+    else if (!a && b) { diffEntries.push({ ...b, diff: 'added' }); hasDiff = true; }
+    else if (a && b && (a.crc32 !== b.crc32 || a.size !== b.size)) { diffEntries.push({ ...b, diff: 'modified', sizeA: a.size, compressedSizeA: a.compressedSize, dateA: a.date }); hasDiff = true; }
+    else { diffEntries.push({ ...a, diff: 'unchanged' }); }
+  }
+
+  const sameCount = diffEntries.filter(e => e.diff === 'unchanged').length;
+  const status = !hasDiff ? 'identical' : 'different';
+  return { filename, fileA, fileB, pathA: pathA || '', pathB: pathB || '', status, entriesA, entriesB, diffEntries, sizeA: fileA.size, sizeB: fileB.size, sameCount };
+}
+
+// ─── Render ─────────────────────────────────────────────
+function renderResults(results) {
+  renderSummary(results);
+  renderList(results);
+}
+
+function renderSummary(results) {
+  const totalA = state.filesA.length;
+  const totalB = state.filesB.length;
+  const identical = results.filter(r => r.status === 'identical').length;
+  const different = results.filter(r => r.status === 'different').length;
+  const onlyA = results.filter(r => r.status === 'only-a').length;
+  const onlyB = results.filter(r => r.status === 'only-b').length;
+  document.getElementById('summary-bar').innerHTML = `
+    <div class="summary-item"><div class="num blue">${totalA}</div><div class="lbl">資料夾 A Jar 數</div></div>
+    <div class="summary-item"><div class="num blue">${totalB}</div><div class="lbl">資料夾 B Jar 數</div></div>
+    <div class="summary-item"><div class="num green">${identical}</div><div class="lbl">內容完全匹配</div></div>
+    <div class="summary-item"><div class="num yellow">${different}</div><div class="lbl">同名但內容不同</div></div>
+    <div class="summary-item"><div class="num red">${onlyA}</div><div class="lbl">僅在資料夾 A</div></div>
+    <div class="summary-item"><div class="num blue">${onlyB}</div><div class="lbl">僅在資料夾 B</div></div>
+  `;
+}
+
+function renderList(results) {
+  const container = document.getElementById('jar-list');
+  if (results.length === 0) {
+    container.innerHTML = '<div class="empty-state"><div class="big-icon">&#x1F50D;</div><p>沒有找到可比較的 jar 檔案</p></div>';
+    return;
+  }
+  container.innerHTML = results.map((r, idx) => buildCard(r, idx)).join('');
+  document.getElementById('filter-result').textContent = `顯示 ${results.length} 組`;
+}
+
+function buildCard(r, idx) {
+  const badges = {
+    identical: '<span class="status-badge status-identical">完全相同</span>',
+    different: `<span class="status-badge status-different">${r.diffEntries.filter(e => e.diff !== 'unchanged').length} 項差異</span>`,
+    'only-a': '<span class="status-badge status-only-a">僅在 A</span>',
+    'only-b': '<span class="status-badge status-only-b">僅在 B</span>',
+  };
+  const folderA = r.pathA ? r.pathA.replace(/\/[^/]+$/, '') : '';
+  const folderB = r.pathB ? r.pathB.replace(/\/[^/]+$/, '') : '';
+  const pathHint = folderA || folderB;
+
+  return `
+    <div class="jar-card" data-status="${r.status}" data-filename="${r.filename.toLowerCase()}">
+      <div class="jar-card-header" onclick="toggleCard(this)">
+        ${badges[r.status]}
+        <span class="name" title="${r.filename}">${r.filename}</span>
+        <span class="path-hint" title="${r.pathA || ''}">${pathHint ? pathHint : ''}</span>
+      </div>
+      <div class="jar-card-body" id="body-${idx}">
+        ${buildDiffTable(r, idx)}
+      </div>
+    </div>
+  `;
+}
+
+function buildDiffTable(r, idx) {
+  if (r.status === 'only-a') {
+    let h = `<table class="diff-summary"><thead><tr><th>資料夾 A</th><th>資料夾 B</th></tr></thead><tbody>`;
+    h += r.diffEntries.map(e => `<tr class="diff-row"><td>${e.path}</td><td class="col-dash">—</td></tr>`).join('');
+    return h + '</tbody></table>';
+  }
+  if (r.status === 'only-b') {
+    let h = `<table class="diff-summary"><thead><tr><th>資料夾 A</th><th>資料夾 B</th></tr></thead><tbody>`;
+    h += r.diffEntries.map(e => `<tr class="diff-row"><td class="col-dash">—</td><td>${e.path}</td></tr>`).join('');
+    return h + '</tbody></table>';
+  }
+
+  const diffRows = r.diffEntries.filter(e => e.diff !== 'unchanged');
+  if (diffRows.length === 0) return '<div style="padding:12px;text-align:center;color:var(--text-dim);font-size:13px;">所有條目完全相同</div>';
+
+  let html = `<table class="diff-summary"><thead><tr><th>資料夾 A</th><th>資料夾 B</th></tr></thead><tbody>`;
+  for (const e of diffRows) {
+    if (e.diff === 'added') html += `<tr class="diff-row"><td class="col-dash">—</td><td>${e.path}</td></tr>`;
+    else if (e.diff === 'removed') html += `<tr class="diff-row"><td>${e.path}</td><td class="col-dash">—</td></tr>`;
+    else html += `<tr class="diff-row"><td>${e.path}</td><td>${e.path}</td></tr>`;
+  }
+  html += '</tbody></table>';
+
+  const modifiedText = diffRows.filter(e => e.diff === 'modified' && e.contentA && e.contentB);
+  for (const e of modifiedText) {
+    const diff = lineDiff(e.contentA, e.contentB);
+    if (!diff.some(d => d.type !== 'same')) continue;
+    const esc = str => str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const renderSide = (lines, sideKey) => lines.map(d => {
+      const bg = d.type === 'modified' ? 'cl-modified' : 'cl-same';
+      return `<div class="cl-row ${bg}"><span class="cl-num">${d.line}</span><span class="cl-text">${esc(d[sideKey])}</span></div>`;
+    }).join('');
+    html += `<div class="content-entry-header" onclick="toggleContentDiff(this)">▶ ${e.path}</div>`;
+    html += `<div class="content-diff" style="display:none;">
+      <div class="content-side"><div class="content-header">A</div><div class="content-lines">${renderSide(diff, 'lineA')}</div></div>
+      <div class="content-side"><div class="content-header">B</div><div class="content-lines">${renderSide(diff, 'lineB')}</div></div>
+    </div>`;
+  }
+
+  return html;
+}
+
+// ─── UI Helpers ────────────────────────────────────────
+function toggleCard(header) {
+  header.nextElementSibling.classList.toggle('open');
+}
+
+function toggleContentDiff(el) {
+  const diff = el.nextElementSibling;
+  const isOpen = diff.style.display !== 'none';
+  diff.style.display = isOpen ? 'none' : '';
+  el.innerHTML = (isOpen ? '▶' : '▼') + ' ' + el.innerHTML.slice(2);
+}
+
+function expandAll(open) {
+  document.querySelectorAll('.jar-card-body').forEach(el => {
+    if (el.closest('.jar-card').style.display !== 'none') {
+      el.classList.toggle('open', open);
+    }
+  });
+}
+
+function applyFilter() {
+  const text = document.getElementById('filter-text').value.toLowerCase();
+  const status = document.getElementById('filter-status').value;
+  const cards = document.querySelectorAll('.jar-card');
+  let visible = 0;
+  cards.forEach(card => {
+    const fn = card.dataset.filename;
+    const st = card.dataset.status;
+    const matchText = !text || fn.includes(text);
+    const matchStatus = status === 'all' || st === status;
+    card.style.display = (matchText && matchStatus) ? '' : 'none';
+    if (matchText && matchStatus) visible++;
+  });
+  document.getElementById('filter-result').textContent = `顯示 ${visible} 組`;
+}
+
+function lineDiff(textA, textB) {
+  const linesA = (textA || '').split('\n');
+  const linesB = (textB || '').split('\n');
+  const freqB = new Map();
+  for (const l of linesB) freqB.set(l, (freqB.get(l) || 0) + 1);
+  const availableB = new Map(freqB);
+  const maxLen = Math.max(linesA.length, linesB.length);
+  const result = [];
+  for (let i = 0; i < maxLen; i++) {
+    const a = i < linesA.length ? linesA[i] : null;
+    const b = i < linesB.length ? linesB[i] : null;
+    if (a === null) {
+      result.push({ line: i + 1, lineA: '', lineB: b, type: (freqB.get(b) || 0) > 0 || (availableB.get(b) || 0) > 0 ? 'same' : 'added' });
+      if (availableB.get(b) > 0) availableB.set(b, availableB.get(b) - 1);
+    } else if (b === null) {
+      const countInB = freqB.get(a) || 0;
+      result.push({ line: i + 1, lineA: a, lineB: '', type: countInB > 0 ? 'same' : 'removed' });
+    } else if (a !== b) {
+      const aExistsInB = (freqB.get(a) || 0) > 0 && (availableB.get(a) || 0) > 0;
+      result.push({ line: i + 1, lineA: a, lineB: b, type: aExistsInB ? 'same' : 'modified' });
+      if (availableB.get(b) > 0) availableB.set(b, availableB.get(b) - 1);
+    } else {
+      result.push({ line: i + 1, lineA: a, lineB: b, type: 'same' });
+      if (availableB.get(b) > 0) availableB.set(b, availableB.get(b) - 1);
+    }
+  }
+  return result;
+}
+
+async function readModifiedContent(results, signal) {
+  for (const r of results) {
+    if (signal && signal.aborted) return;
+    if (r.status !== 'different') continue;
+    const modified = r.diffEntries.filter(e => e.diff === 'modified' && e.size < 524288);
+    if (modified.length === 0) continue;
+    for (const side of ['A', 'B']) {
+      const file = side === 'A' ? r.fileA : r.fileB;
+      if (!file) continue;
+      try {
+        const buffer = await file.arrayBuffer();
+        const zip = await JSZip.loadAsync(buffer);
+        for (const e of modified) {
+          const entry = zip.file(e.path);
+          if (entry) {
+            const text = await entry.async('string');
+            if (side === 'A') e.contentA = text; else e.contentB = text;
+          }
+        }
+      } catch (_) {}
+    }
+  }
+}
+
+let toastTimer;
+function showToast(msg, type) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show' + (type ? ' ' + type : '');
+  clearTimeout(toastTimer);
+  const duration = Math.min(Math.max(msg.length * 30, 2000), 6000);
+  toastTimer = setTimeout(() => el.classList.remove('show'), duration);
+}
+
+function toggleTheme() {
+  const html = document.documentElement;
+  html.classList.toggle('light');
+  const btn = document.getElementById('theme-toggle');
+  btn.textContent = html.classList.contains('light') ? '🌙' : '☀️';
+  localStorage.setItem('jar-comp-theme', html.classList.contains('light') ? 'light' : 'dark');
+}
+
+// restore saved theme
+(function() {
+  if (localStorage.getItem('jar-comp-theme') === 'light') {
+    document.documentElement.classList.add('light');
+    document.getElementById('theme-toggle').textContent = '🌙';
+  }
+})();
+</script>
+</body>
+</html>
