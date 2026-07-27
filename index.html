@@ -112,7 +112,7 @@ header p { color: var(--text-dim); font-size: 14px; margin-top: 4px; }
 
 .jar-card {
   background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius);
-  transition: border-color .2s;
+  transition: border-color .2s; width: 100%;
 }
 .jar-card:hover { border-color: #484f58; }
 .jar-card.card-highlight { border-color: var(--yellow); border-width: 2px; box-shadow: 0 0 0 1px rgba(210, 153, 34, 0.2); }
@@ -163,7 +163,7 @@ footer { text-align: center; padding: 20px; color: var(--text-dim); font-size: 1
 .content-side { flex: none; width: 50%; min-width: 400px; }
 .content-side:first-child { border-right: 1px solid var(--border); }
 .content-header { padding: 6px 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; background: #0d1117; border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 1; }
-.content-lines { font-family: 'SF Mono', Consolas, monospace; font-size: 12px; max-height: 500px; overflow-y: auto; }
+.content-lines { font-family: 'SF Mono', Consolas, monospace; font-size: 12px; max-height: 748px; overflow-y: auto; }
 .cl-row { display: flex; min-height: 22px; }
 .cl-row.cl-same { background: transparent; }
 .cl-row.cl-modified { background: rgba(248, 81, 73, 0.25); }
@@ -186,7 +186,7 @@ footer { text-align: center; padding: 20px; color: var(--text-dim); font-size: 1
 .diff-note-size { color: var(--yellow); }
 .diff-note-binary { color: var(--red); }
 .diff-note-large { color: var(--text-dim); font-weight: 400; }
-.content-entry-header { padding: 8px 12px 4px; font-size: 12px; font-weight: 600; color: var(--accent); margin-top: 8px; border-top: 1px solid var(--border); padding-top: 10px; cursor: pointer; user-select: none; }
+.content-entry-header { padding: 8px 12px 4px; font-size: 12px; font-weight: 600; color: var(--accent); margin-top: 8px; border-top: 1px solid var(--border); padding-top: 10px; cursor: pointer; user-select: none; position: sticky; top: 48px; z-index: 5; background: var(--bg-card); }
 .content-entry-header:hover { color: var(--text); }
 
 /* Animations */
@@ -291,7 +291,7 @@ function updateZone(side, files) {
     detail.textContent = dirSummary;
     const parts = paths[0].split('/');
     if (parts.length > 1) {
-      if (folderHint) folderHint.textContent = '📂 ' + parts[0] + (parts.length > 2 ? '/...' : '');
+      if (folderHint) folderHint.textContent = '📂 .\\' + paths[0].substring(0, paths[0].lastIndexOf('/'));
     } else if (folderHint) {
       folderHint.textContent = '📂 (根目錄)';
     }
@@ -501,7 +501,7 @@ function buildCard(r, idx, offset) {
   };
   const folderA = r.pathA ? r.pathA.replace(/\/[^/]+$/, '') : '';
   const folderB = r.pathB ? r.pathB.replace(/\/[^/]+$/, '') : '';
-  const pathHint = folderA || folderB;
+  const pathHint = r.pathA ? '.\\' + r.pathA : (r.pathB ? '.\\' + r.pathB : '');
   const highlight = r.status === 'different' ? ' card-highlight' : '';
   const realIdx = (offset || 0) + idx;
 
