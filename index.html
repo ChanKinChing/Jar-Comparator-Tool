@@ -602,10 +602,12 @@ async function readModifiedContent(results, signal) {
         const zip = await JSZip.loadAsync(buffer);
         for (const e of modified) {
           const entry = zip.file(e.path);
-          if (entry) {
-            const text = await entry.async('string');
-            if (side === 'A') e.contentA = text; else e.contentB = text;
-          }
+          if (!entry) continue;
+          const raw = await entry.async('uint8array');
+          const isBinary = raw.length > 0 && raw.subarray(0, 4096).indexOf(0) !== -1;
+          if (isBinary) continue;
+          const text = new TextDecoder().decode(raw);
+          if (side === 'A') e.contentA = text; else e.contentB = text;
         }
       } catch (_) {}
     }

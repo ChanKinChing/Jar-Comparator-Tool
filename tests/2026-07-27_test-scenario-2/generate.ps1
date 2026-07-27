@@ -138,9 +138,13 @@ New-Jar "$dirA\special-chars.jar" @(@{Name="[test] (1) & special$.txt"; Text="Ve
 New-Jar "$dirB\special-chars.jar" @(@{Name="[test] (1) & special$.txt"; Text="Version B content (modified)`n"})
 Write-Host "13/22 special-chars.jar"
 
-# ── 14. binary-diff (>512KB, no content diff) ──
-$binA = [byte[]]@(0..255) * 2400
-$binB = [byte[]]@(255..0) * 2400
+# ── 14. binary-diff (.class with proper magic header, <512KB → tests null-byte detection) ──
+$headerA = [byte[]]@(0xCA, 0xFE, 0xBA, 0xBE, 0x00, 0x00, 0x00, 0x34)  # Java class magic + version
+$padA = [byte[]]@(0) * 50000   # null padding (~50KB)
+$binA = $headerA + $padA
+$headerB = [byte[]]@(0xCA, 0xFE, 0xBA, 0xBE, 0x00, 0x00, 0x00, 0x35)  # Different version
+$padB = [byte[]]@(0) * 50000
+$binB = $headerB + $padB
 New-Jar "$dirA\binary-diff.jar" @(@{Name="classes/App.class"; Bytes=$binA})
 New-Jar "$dirB\binary-diff.jar" @(@{Name="classes/App.class"; Bytes=$binB})
 Write-Host "14/22 binary-diff.jar"
