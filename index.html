@@ -166,6 +166,10 @@ footer { text-align: center; padding: 20px; color: var(--text-dim); font-size: 1
 .diff-summary td { padding: 4px 12px; border-bottom: 1px solid #1c2333; font-family: 'SF Mono', Consolas, monospace; font-size: 12px; }
 .diff-summary tr.diff-row td { background: rgba(248, 81, 73, 0.15); }
 .diff-summary .col-dash { color: var(--text-dim); text-align: center; }
+.diff-note { font-size: 11px; margin-left: 8px; font-weight: 600; }
+.diff-note-size { color: var(--yellow); }
+.diff-note-binary { color: var(--red); }
+.diff-note-large { color: var(--text-dim); font-weight: 400; }
 .content-entry-header { padding: 8px 12px 4px; font-size: 12px; font-weight: 600; color: var(--accent); margin-top: 8px; border-top: 1px solid var(--border); padding-top: 10px; cursor: pointer; user-select: none; }
 .content-entry-header:hover { color: var(--text); }
 
@@ -500,7 +504,16 @@ function buildDiffTable(r, idx) {
   for (const e of diffRows) {
     if (e.diff === 'added') html += `<tr class="diff-row"><td class="col-dash">—</td><td>${e.path}</td></tr>`;
     else if (e.diff === 'removed') html += `<tr class="diff-row"><td>${e.path}</td><td class="col-dash">—</td></tr>`;
-    else html += `<tr class="diff-row"><td>${e.path}</td><td>${e.path}</td></tr>`;
+    else {
+      let note = '';
+      if (e.binary) {
+        if (e.sizeA !== e.size) note = ` <span class="diff-note diff-note-size">檔案大小不同 (${e.sizeA} → ${e.size} bytes)</span>`;
+        else note = ` <span class="diff-note diff-note-binary">二進位內容不一致</span>`;
+      } else if (!e.contentA && !e.contentB && e.size >= 524288) {
+        note = ` <span class="diff-note diff-note-large">(檔案過大，${(e.size / 1024).toFixed(0)} KB)</span>`;
+      }
+      html += `<tr class="diff-row"><td>${e.path}</td><td>${e.path}${note}</td></tr>`;
+    }
   }
   html += '</tbody></table>';
 
@@ -519,6 +532,8 @@ function buildDiffTable(r, idx) {
       <div class="content-side"><div class="content-header">B</div><div class="content-lines">${renderSide(diff, 'lineB')}</div></div>
     </div>`;
   }
+
+  // binary / large entries: no content-expandable section needed (note already in summary row)
 
   return html;
 }
@@ -605,7 +620,10 @@ async function readModifiedContent(results, signal) {
           if (!entry) continue;
           const raw = await entry.async('uint8array');
           const isBinary = raw.length > 0 && raw.subarray(0, 4096).indexOf(0) !== -1;
-          if (isBinary) continue;
+          if (isBinary) {
+            e.binary = true;
+            continue;
+          }
           const text = new TextDecoder().decode(raw);
           if (side === 'A') e.contentA = text; else e.contentB = text;
         }
