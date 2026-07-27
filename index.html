@@ -249,7 +249,7 @@ footer { text-align: center; padding: 20px; color: var(--text-dim); font-size: 1
   <div id="filter-bar">
     <input type="text" id="filter-text" placeholder="搜尋 jar 檔名..." oninput="applyFilter()">
     <select id="filter-status" onchange="applyFilter()">
-      <option value="all">全部</option>
+      <option value="">全部</option>
       <option value="different">僅有差異</option>
       <option value="identical">僅完全相同</option>
       <option value="only-a">僅資料夾 A</option>
@@ -563,7 +563,7 @@ function buildDiffTable(r, idx) {
       return `<div class="cl-row ${bg}"><span class="cl-num">${d.line}</span><span class="cl-text">${esc(d[sideKey])}</span></div>`;
     }).join('');
     html += `<div class="content-entry-header" onclick="toggleContentDiff(this)">▶ ${e.path}</div>`;
-    html += `<div class="content-diff-wrapper"><div class="content-diff" style="display:none;">
+    html += `<div class="content-diff-wrapper" style="display:none;"><div class="content-diff">
       <div class="content-side"><div class="content-header">A</div><div class="content-lines">${renderSide(diff, 'lineA')}</div></div>
       <div class="content-side"><div class="content-header">B</div><div class="content-lines">${renderSide(diff, 'lineB')}</div></div>
     </div></div>`;
@@ -601,7 +601,7 @@ function applyFilter() {
 
   // Show/hide identical table
   if (identTable) {
-    const matchesIdentical = status === 'all' || status === 'identical';
+    const matchesIdentical = !status || status === 'identical';
     const matchesText = !text || identTable.innerText.toLowerCase().includes(text);
     identTable.style.display = (matchesIdentical && matchesText) ? '' : 'none';
     if (matchesIdentical && matchesText) visible += identTable.querySelectorAll('tbody tr').length;
@@ -611,7 +611,7 @@ function applyFilter() {
     const fn = card.dataset.filename;
     const st = card.dataset.status;
     const matchText = !text || fn.includes(text);
-    const matchStatus = status === 'all' || st === status;
+    const matchStatus = !status || st === status;
     card.style.display = (matchText && matchStatus) ? '' : 'none';
     if (matchText && matchStatus) visible++;
   });
