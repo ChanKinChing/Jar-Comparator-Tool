@@ -101,14 +101,25 @@ header p { color: var(--text-dim); font-size: 14px; margin-top: 4px; }
 
 /* Jar List */
 #jar-list { display: flex; flex-direction: column; gap: 8px; }
+
+/* Identical merged table */
+.identical-table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
+.identical-table th { padding: 8px 16px; text-align: left; font-weight: 600; font-size: 12px; color: var(--text-dim); background: var(--bg-card); border-bottom: 2px solid var(--border); }
+.identical-table td { padding: 6px 16px; border-bottom: 1px solid #1c2333; font-size: 13px; }
+.identical-table tr:last-child td { border-bottom: none; }
+.identical-table .id-filename { font-weight: 600; }
+.identical-table .id-path-a, .identical-table .id-path-b { font-size: 11px; color: var(--text-dim); font-family: 'SF Mono', Consolas, monospace; }
+
 .jar-card {
   background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius);
-  overflow: hidden; transition: border-color .2s;
+  transition: border-color .2s;
 }
 .jar-card:hover { border-color: #484f58; }
+.jar-card.card-highlight { border-color: var(--yellow); border-width: 2px; box-shadow: 0 0 0 1px rgba(210, 153, 34, 0.2); }
 .jar-card-header {
   display: flex; align-items: center; gap: 12px; padding: 12px 16px; cursor: pointer;
   user-select: none; transition: background .15s;
+  position: sticky; top: 0; z-index: 10; background: var(--bg-card);
 }
 .jar-card-header:hover { background: var(--bg-hover); }
 .jar-card-header .name { font-weight: 600; font-size: 14px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -147,8 +158,9 @@ footer { text-align: center; padding: 20px; color: var(--text-dim); font-size: 1
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* Content Diff */
-.content-diff { display: flex; gap: 0; border-top: 1px solid var(--border); }
-.content-side { flex: 1; min-width: 0; width: 50%; }
+.content-diff-wrapper { overflow-x: auto; }
+.content-diff { display: flex; gap: 0; border-top: 1px solid var(--border); min-width: max-content; }
+.content-side { flex: none; width: 50%; min-width: 400px; }
 .content-side:first-child { border-right: 1px solid var(--border); }
 .content-header { padding: 6px 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; background: #0d1117; border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 1; }
 .content-lines { font-family: 'SF Mono', Consolas, monospace; font-size: 12px; max-height: 500px; overflow-y: auto; }
@@ -156,7 +168,7 @@ footer { text-align: center; padding: 20px; color: var(--text-dim); font-size: 1
 .cl-row.cl-same { background: transparent; }
 .cl-row.cl-modified { background: rgba(248, 81, 73, 0.25); }
 .cl-num { width: 36px; text-align: right; color: var(--text-dim); padding: 2px 6px; user-select: none; border-right: 1px solid var(--border); flex-shrink: 0; font-size: 11px; }
-.cl-text { padding: 2px 8px; white-space: pre; overflow-x: auto; flex: 1; min-width: 0; }
+.cl-text { padding: 2px 8px; white-space: pre; flex: 1; min-width: 0; }
 .content-toggle { cursor: pointer; font-size: 11px; color: var(--accent); margin-left: 8px; text-decoration: none; }
 .content-toggle:hover { text-decoration: underline; }
 
@@ -165,7 +177,11 @@ footer { text-align: center; padding: 20px; color: var(--text-dim); font-size: 1
 .diff-summary th { padding: 6px 12px; text-align: left; font-weight: 600; font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .5px; background: #0d1117; border-bottom: 1px solid var(--border); }
 .diff-summary td { padding: 4px 12px; border-bottom: 1px solid #1c2333; font-family: 'SF Mono', Consolas, monospace; font-size: 12px; }
 .diff-summary tr.diff-row td { background: rgba(248, 81, 73, 0.15); }
+.diff-summary tr.unchanged-row td { color: var(--text-dim); }
 .diff-summary .col-dash { color: var(--text-dim); text-align: center; }
+.diff-summary.col-only { width: 100%; }
+.diff-summary.col-only th { background: transparent; border-bottom: 1px solid var(--border); }
+.diff-summary.col-only td { border-bottom: 1px solid #1c2333; }
 .diff-note { font-size: 11px; margin-left: 8px; font-weight: 600; }
 .diff-note-size { color: var(--yellow); }
 .diff-note-binary { color: var(--red); }
@@ -456,11 +472,27 @@ function renderList(results) {
     container.innerHTML = '<div class="empty-state"><div class="big-icon">&#x1F50D;</div><p>沒有找到可比較的 jar 檔案</p></div>';
     return;
   }
-  container.innerHTML = results.map((r, idx) => buildCard(r, idx)).join('');
+
+  const identical = results.filter(r => r.status === 'identical');
+  const others = results.filter(r => r.status !== 'identical');
+
+  let html = '';
+  if (identical.length > 0) {
+    html += `<table class="identical-table"><thead><tr><th>Jar 檔名</th><th>路徑 (A)</th><th>路徑 (B)</th></tr></thead><tbody>`;
+    html += identical.map(r => {
+      const folderA = r.pathA ? r.pathA.replace(/\/[^/]+$/, '') : '';
+      const folderB = r.pathB ? r.pathB.replace(/\/[^/]+$/, '') : '';
+      return `<tr><td class="id-filename">${r.filename}</td><td class="id-path-a">${folderA}</td><td class="id-path-b">${folderB}</td></tr>`;
+    }).join('');
+    html += '</tbody></table>';
+  }
+
+  html += others.map((r, idx) => buildCard(r, idx, identical.length)).join('');
+  container.innerHTML = html;
   document.getElementById('filter-result').textContent = `顯示 ${results.length} 組`;
 }
 
-function buildCard(r, idx) {
+function buildCard(r, idx, offset) {
   const badges = {
     identical: '<span class="status-badge status-identical">完全相同</span>',
     different: `<span class="status-badge status-different">${r.diffEntries.filter(e => e.diff !== 'unchanged').length} 項差異</span>`,
@@ -470,16 +502,18 @@ function buildCard(r, idx) {
   const folderA = r.pathA ? r.pathA.replace(/\/[^/]+$/, '') : '';
   const folderB = r.pathB ? r.pathB.replace(/\/[^/]+$/, '') : '';
   const pathHint = folderA || folderB;
+  const highlight = r.status === 'different' ? ' card-highlight' : '';
+  const realIdx = (offset || 0) + idx;
 
   return `
-    <div class="jar-card" data-status="${r.status}" data-filename="${r.filename.toLowerCase()}">
+    <div class="jar-card${highlight}" data-status="${r.status}" data-filename="${r.filename.toLowerCase()}">
       <div class="jar-card-header" onclick="toggleCard(this)">
         ${badges[r.status]}
         <span class="name" title="${r.filename}">${r.filename}</span>
         <span class="path-hint" title="${r.pathA || ''}">${pathHint ? pathHint : ''}</span>
       </div>
-      <div class="jar-card-body" id="body-${idx}">
-        ${buildDiffTable(r, idx)}
+      <div class="jar-card-body" id="body-${realIdx}">
+        ${buildDiffTable(r, realIdx)}
       </div>
     </div>
   `;
@@ -487,23 +521,25 @@ function buildCard(r, idx) {
 
 function buildDiffTable(r, idx) {
   if (r.status === 'only-a') {
-    let h = `<table class="diff-summary"><thead><tr><th>資料夾 A</th><th>資料夾 B</th></tr></thead><tbody>`;
-    h += r.diffEntries.map(e => `<tr class="diff-row"><td>${e.path}</td><td class="col-dash">—</td></tr>`).join('');
+    let h = `<table class="diff-summary col-only"><thead><tr><th>僅在資料夾 A 內的條目</th></tr></thead><tbody>`;
+    h += r.diffEntries.map(e => `<tr><td>${e.path}</td></tr>`).join('');
     return h + '</tbody></table>';
   }
   if (r.status === 'only-b') {
-    let h = `<table class="diff-summary"><thead><tr><th>資料夾 A</th><th>資料夾 B</th></tr></thead><tbody>`;
-    h += r.diffEntries.map(e => `<tr class="diff-row"><td class="col-dash">—</td><td>${e.path}</td></tr>`).join('');
+    let h = `<table class="diff-summary col-only"><thead><tr><th>僅在資料夾 B 內的條目</th></tr></thead><tbody>`;
+    h += r.diffEntries.map(e => `<tr><td>${e.path}</td></tr>`).join('');
     return h + '</tbody></table>';
   }
 
-  const diffRows = r.diffEntries.filter(e => e.diff !== 'unchanged');
-  if (diffRows.length === 0) return '<div style="padding:12px;text-align:center;color:var(--text-dim);font-size:13px;">所有條目完全相同</div>';
+  const showAll = true;
+  const rows = showAll ? r.diffEntries : r.diffEntries.filter(e => e.diff !== 'unchanged');
+  if (rows.length === 0) return '<div style="padding:12px;text-align:center;color:var(--text-dim);font-size:13px;">所有條目完全相同</div>';
 
   let html = `<table class="diff-summary"><thead><tr><th>資料夾 A</th><th>資料夾 B</th></tr></thead><tbody>`;
-  for (const e of diffRows) {
+  for (const e of rows) {
     if (e.diff === 'added') html += `<tr class="diff-row"><td class="col-dash">—</td><td>${e.path}</td></tr>`;
     else if (e.diff === 'removed') html += `<tr class="diff-row"><td>${e.path}</td><td class="col-dash">—</td></tr>`;
+    else if (e.diff === 'unchanged') html += `<tr class="unchanged-row"><td>${e.path}</td><td>${e.path}</td></tr>`;
     else {
       let note = '';
       if (e.binary) {
@@ -517,7 +553,7 @@ function buildDiffTable(r, idx) {
   }
   html += '</tbody></table>';
 
-  const modifiedText = diffRows.filter(e => e.diff === 'modified' && e.contentA && e.contentB);
+  const modifiedText = r.diffEntries.filter(e => e.diff === 'modified' && e.contentA && e.contentB);
   for (const e of modifiedText) {
     const diff = lineDiff(e.contentA, e.contentB);
     if (!diff.some(d => d.type !== 'same')) continue;
@@ -527,13 +563,11 @@ function buildDiffTable(r, idx) {
       return `<div class="cl-row ${bg}"><span class="cl-num">${d.line}</span><span class="cl-text">${esc(d[sideKey])}</span></div>`;
     }).join('');
     html += `<div class="content-entry-header" onclick="toggleContentDiff(this)">▶ ${e.path}</div>`;
-    html += `<div class="content-diff" style="display:none;">
+    html += `<div class="content-diff-wrapper"><div class="content-diff" style="display:none;">
       <div class="content-side"><div class="content-header">A</div><div class="content-lines">${renderSide(diff, 'lineA')}</div></div>
       <div class="content-side"><div class="content-header">B</div><div class="content-lines">${renderSide(diff, 'lineB')}</div></div>
-    </div>`;
+    </div></div>`;
   }
-
-  // binary / large entries: no content-expandable section needed (note already in summary row)
 
   return html;
 }
@@ -561,8 +595,18 @@ function expandAll(open) {
 function applyFilter() {
   const text = document.getElementById('filter-text').value.toLowerCase();
   const status = document.getElementById('filter-status').value;
-  const cards = document.querySelectorAll('.jar-card');
+  const cards = document.querySelectorAll('#jar-list > .jar-card');
+  const identTable = document.querySelector('#jar-list > .identical-table');
   let visible = 0;
+
+  // Show/hide identical table
+  if (identTable) {
+    const matchesIdentical = status === 'all' || status === 'identical';
+    const matchesText = !text || identTable.innerText.toLowerCase().includes(text);
+    identTable.style.display = (matchesIdentical && matchesText) ? '' : 'none';
+    if (matchesIdentical && matchesText) visible += identTable.querySelectorAll('tbody tr').length;
+  }
+
   cards.forEach(card => {
     const fn = card.dataset.filename;
     const st = card.dataset.status;
