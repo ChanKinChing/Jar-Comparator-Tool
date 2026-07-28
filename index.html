@@ -568,7 +568,6 @@ function buildDiffTable(r, idx) {
   for (const e of modifiedText) {
     const diff = lineDiff(e.contentA, e.contentB);
     if (!diff.some(d => d.type !== 'same')) continue;
-    console.log(`[lineDiff] ${e.path}:`, diff.map(d => `${d.line}:${d.type}`).join(' '));
     const esc = str => str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     const renderSide = (lines, sideKey) => lines.map(d => {
       const bg = d.type === 'modified' ? 'cl-modified' : 'cl-same';
@@ -653,15 +652,11 @@ function lineDiff(textA, textB) {
     } else if (a !== b) {
       const aInB = (freqB.get(a) || 0) > 0 && (availableB.get(a) || 0) > 0;
       const bInA = (freqA.get(b) || 0) > 0 && (availableA.get(b) || 0) > 0;
-      if (aInB) {
+      if (aInB && bInA) {
         result.push({ line: i + 1, lineA: a, lineB: b, type: 'same' });
         if (availableB.get(a) > 0) availableB.set(a, availableB.get(a) - 1);
-      } else if (bInA) {
-        result.push({ line: i + 1, lineA: a, lineB: b, type: 'same' });
-        if (availableA.get(b) > 0) availableA.set(b, availableA.get(b) - 1);
       } else {
         result.push({ line: i + 1, lineA: a, lineB: b, type: 'modified' });
-        if (availableB.get(b) > 0) availableB.set(b, availableB.get(b) - 1);
       }
     } else {
       result.push({ line: i + 1, lineA: a, lineB: b, type: 'same' });
