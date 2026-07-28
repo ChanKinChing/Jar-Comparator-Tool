@@ -56,6 +56,10 @@ header p { color: var(--text-dim); font-size: 14px; margin-top: 4px; }
 .folder-zone .icon-folder { font-size: 32px; margin-bottom: 8px; opacity: .5; }
 
 #controls { display: flex; align-items: center; gap: 12px; width: 100%; margin-top: 4px; }
+#export-btn { padding: 10px 20px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); font-size: 14px; font-weight: 600; cursor: pointer; transition: all .2s; opacity: .5; }
+#export-btn:not(:disabled) { opacity: 1; }
+#export-btn:not(:disabled):hover { border-color: var(--accent); color: var(--accent); transform: translateY(-1px); }
+#export-btn:disabled { cursor: not-allowed; }
 #compare-btn {
   padding: 10px 32px; background: var(--accent); color: #fff; border: none; border-radius: var(--radius);
   font-size: 15px; font-weight: 600; cursor: pointer; transition: all .2s; opacity: .5;
@@ -250,6 +254,7 @@ footer { text-align: center; padding: 20px; color: var(--text-dim); font-size: 1
   <input type="file" id="inputB" webkitdirectory multiple onchange="handleFolder(this, 'B')" style="display:none">
   <div id="controls">
     <button id="compare-btn" disabled onclick="startCompare()">&#x1F50D; 開始比對</button>
+    <button id="export-btn" disabled onclick="exportResults()" style="padding:10px 20px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:14px;font-weight:600;cursor:pointer;transition:all .2s;opacity:.5;">&#x1F4CB; 匯出 HTML 報告</button>
     <button id="cancel-btn" style="display:none;padding:10px 20px;background:var(--red);color:#fff;border:none;border-radius:var(--radius);font-size:14px;font-weight:600;cursor:pointer;" onclick="cancelCompare()">&#x2716; 取消</button>
     <span id="progress-text"></span>
   </div>
@@ -325,6 +330,7 @@ async function startCompare() {
   const progress = document.getElementById('progress-text');
   state.abort = new AbortController();
   const signal = state.abort.signal;
+  document.getElementById('export-btn').disabled = true;
   btn.style.display = 'none';
   cancelBtn.style.display = '';
   progress.innerHTML = '<span class="spinner"></span> 正在讀取 Jar 檔案...';
@@ -338,6 +344,7 @@ async function startCompare() {
     state.results = results;
     renderResults(results);
     document.getElementById('results-section').classList.add('visible');
+    document.getElementById('export-btn').disabled = false;
     showToast(`比對完成：${results.length} 組 Jar`, 'success');
   } catch (err) {
     if (err.name === 'AbortError' || signal.aborted) {
@@ -730,6 +737,41 @@ function showToast(msg, type) {
   clearTimeout(toastTimer);
   const duration = Math.min(Math.max(msg.length * 30, 2000), 6000);
   toastTimer = setTimeout(() => el.classList.remove('show'), duration);
+}
+
+function exportResults() {
+  const css = document.querySelector('style').textContent;
+  const resultsHTML = document.getElementById('results-section').innerHTML;
+  const isLight = document.documentElement.classList.contains('light');
+  const html = `<!DOCTYPE html>
+<html${isLight ? ' class="light"' : ''}>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Jar Comparator — 比對報告</title><style>${css}</style></head>
+<body>
+<div id="app">
+<section id="results-section" class="visible">
+  ${resultsHTML}
+</section>
+<footer>Jar Comparator Tool &mdash; 比對報告</footer>
+</div>
+<button id="scroll-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" title="回到頂部">&uarr;</button>
+<script>
+function toggleCard(h){h.nextElementSibling.classList.toggle('open')}
+function toggleContentDiff(el){var d=el.nextElementSibling,i=d.style.display!=='none';d.style.display=i?'none':'';el.innerHTML=(i?'\\u25B6':'\\u25BC')+' '+el.innerHTML.slice(2)}
+function expandAll(o){document.querySelectorAll('.jar-card-body').forEach(function(e){if(e.closest('.jar-card').style.display!=='none')e.classList.toggle('open',o)})}
+function applyFilter(){var t=document.getElementById('filter-text').value.toLowerCase(),s=document.getElementById('filter-status').value,c=document.querySelectorAll('#jar-list>.jar-card'),it=document.querySelector('#jar-list>.identical-table'),v=0;if(it){var mi=!s||s==='identical',mt=!t||it.innerText.toLowerCase().includes(t);it.style.display=mi&&mt?'':'none';if(mi&&mt)v+=it.querySelectorAll('tbody tr').length}c.forEach(function(cd){var fn=cd.dataset.filename,st=cd.dataset.status,mt=!t||fn.includes(t),ms=!s||st===s;cd.style.display=mt&&ms?'':'none';if(mt&&ms)v++});document.getElementById('filter-result').textContent='\\u986F\\u793A '+v+' \\u7D44'}
+window.addEventListener('scroll',function(){document.getElementById('scroll-top').classList.toggle('show',window.scrollY>400)},{passive:true})
+applyFilter();
+<\/script>
+</body>
+</html>`;
+  const blob = new Blob([html], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'jar-comparison-report.html';
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+  showToast('報告已匯出為 jar-comparison-report.html', 'success');
 }
 
 function toggleTheme() {
