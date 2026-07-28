@@ -175,7 +175,7 @@ footer { text-align: center; padding: 20px; color: var(--text-dim); font-size: 1
 .content-side:first-child { border-right: 1px solid var(--border); }
 .content-header { padding: 6px 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; background: #0d1117; border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 1; }
 .content-lines { font-family: 'SF Mono', Consolas, monospace; font-size: 12px; max-height: 748px; overflow: auto; }
-.cl-row { display: flex; min-height: 22px; }
+.cl-row { display: flex; min-height: 22px; min-width: 100%; }
 .cl-row.cl-same { background: transparent; }
 .cl-row.cl-modified { background: rgba(248, 81, 73, 0.25); }
 .cl-num { width: 36px; text-align: right; color: var(--text-dim); padding: 2px 6px; user-select: none; border-right: 1px solid var(--border); flex-shrink: 0; font-size: 11px; }
@@ -568,6 +568,7 @@ function buildDiffTable(r, idx) {
   for (const e of modifiedText) {
     const diff = lineDiff(e.contentA, e.contentB);
     if (!diff.some(d => d.type !== 'same')) continue;
+    console.log(`[lineDiff] ${e.path}:`, diff.map(d => `${d.line}:${d.type}`).join(' '));
     const esc = str => str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     const renderSide = (lines, sideKey) => lines.map(d => {
       const bg = d.type === 'modified' ? 'cl-modified' : 'cl-same';
@@ -630,8 +631,8 @@ function applyFilter() {
 }
 
 function lineDiff(textA, textB) {
-  const linesA = (textA || '').split('\n');
-  const linesB = (textB || '').split('\n');
+  const linesA = (textA || '').split('\n').map(l => l.replace(/\r$/, ''));
+  const linesB = (textB || '').split('\n').map(l => l.replace(/\r$/, ''));
   const freqA = new Map(), freqB = new Map();
   for (const l of linesA) freqA.set(l, (freqA.get(l) || 0) + 1);
   for (const l of linesB) freqB.set(l, (freqB.get(l) || 0) + 1);
