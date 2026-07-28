@@ -368,6 +368,7 @@ async function compareAllJars(filesA, filesB, progressEl, signal) {
   let done = 0;
   const total = groups.length;
   const batchSize = 5;
+  console.log('[debug] groups:', total, groups.map(g => `${g.filename} A=${!!g.fileA} B=${!!g.fileB}`));
 
   for (let i = 0; i < groups.length && !signal.aborted; i += batchSize) {
     const batch = groups.slice(i, i + batchSize);
@@ -376,6 +377,7 @@ async function compareAllJars(filesA, filesB, progressEl, signal) {
         g.fileA ? readJarEntries(g.fileA) : Promise.resolve(null),
         g.fileB ? readJarEntries(g.fileB) : Promise.resolve(null)
       ]);
+      console.log(`[debug] ${g.filename}: entriesA=${entriesA?.length??'null'} entriesB=${entriesB?.length??'null'}`);
       return computeDiff(g.filename, g.fileA, g.fileB, entriesA, entriesB, g.pathA, g.pathB);
     }));
     results.push(...batchResults);
@@ -391,6 +393,7 @@ async function compareAllJars(filesA, filesB, progressEl, signal) {
     const order = { 'different': 0, 'only-a': 1, 'only-b': 2, 'identical': 3 };
     return (order[a.status] || 9) - (order[b.status] || 9) || a.filename.localeCompare(b.filename);
   });
+  console.log('[debug] results:', results.map(r => `${r.filename}: ${r.status} diffEntries=${r.diffEntries.length} hasDiff=${r.diffEntries.some(e=>e.diff!=='unchanged')}`));
   return results;
 }
 
@@ -422,10 +425,14 @@ function readJarEntries(file) {
         });
         resolve(entries);
       } catch (err) {
+        console.warn('[debug] JSZip load failed:', file.name, err.message);
         resolve([]); // treat unreadable jars as empty
       }
     };
-    reader.onerror = () => resolve([]);
+    reader.onerror = () => {
+      console.warn('[debug] FileReader error:', file.name);
+      resolve([]);
+    };
     reader.readAsArrayBuffer(file);
   });
 }
