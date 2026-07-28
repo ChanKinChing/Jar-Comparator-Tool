@@ -368,7 +368,6 @@ async function compareAllJars(filesA, filesB, progressEl, signal) {
   let done = 0;
   const total = groups.length;
   const batchSize = 5;
-  console.log('[debug] groups:', total, groups.map(g => `${g.filename} A=${!!g.fileA} B=${!!g.fileB}`));
 
   for (let i = 0; i < groups.length && !signal.aborted; i += batchSize) {
     const batch = groups.slice(i, i + batchSize);
@@ -377,7 +376,6 @@ async function compareAllJars(filesA, filesB, progressEl, signal) {
         g.fileA ? readJarEntries(g.fileA) : Promise.resolve(null),
         g.fileB ? readJarEntries(g.fileB) : Promise.resolve(null)
       ]);
-      console.log(`[debug] ${g.filename}: entriesA=${entriesA?.length??'null'} entriesB=${entriesB?.length??'null'}`);
       return computeDiff(g.filename, g.fileA, g.fileB, entriesA, entriesB, g.pathA, g.pathB);
     }));
     results.push(...batchResults);
@@ -393,15 +391,40 @@ async function compareAllJars(filesA, filesB, progressEl, signal) {
     const order = { 'different': 0, 'only-a': 1, 'only-b': 2, 'identical': 3 };
     return (order[a.status] || 9) - (order[b.status] || 9) || a.filename.localeCompare(b.filename);
   });
-  console.log('[debug] results:', results.map(r => `${r.filename}: ${r.status} diffEntries=${r.diffEntries.length} hasDiff=${r.diffEntries.some(e=>e.diff!=='unchanged')}`));
   return results;
+}
+
+function normalizeJarName(name) {
+  const base = name.replace(/\.jar$/i, '');
+  const stripped = base.replace(/^mta-batch-mta-/, '').replace(/^mta-/, '');
+  return stripped + '.jar';
 }
 
 function groupByFilename(filesA, filesB) {
   const map = {};
-  filesA.forEach(f => { const name = f.name; if (!map[name]) map[name] = {}; map[name].fileA = f; map[name].pathA = f.webkitRelativePath; });
-  filesB.forEach(f => { const name = f.name; if (!map[name]) map[name] = {}; map[name].fileB = f; map[name].pathB = f.webkitRelativePath; });
-  return Object.entries(map).map(([filename, v]) => ({ filename, ...v }));
+  filesA.forEach(f => {
+    const key = normalizeJarName(f.name);
+    if (!map[key]) map[key] = {};
+    map[key].fileA = f;
+    map[key].pathA = f.webkitRelativePath;
+    map[key].nameA = f.name;
+  });
+  filesB.forEach(f => {
+    const key = normalizeJarName(f.name);
+    if (!map[key]) map[key] = {};
+    map[key].fileB = f;
+    map[key].pathB = f.webkitRelativePath;
+    map[key].nameB = f.name;
+  });
+  return Object.entries(map).map(([key, v]) => ({
+    filename: v.nameA || v.nameB || key,
+    displayName: v.nameA && v.nameB && v.nameA !== v.nameB ? `${v.nameA} ↔ ${v.nameB}` : (v.nameA || v.nameB),
+    filterNames: [v.nameA, v.nameB].filter(Boolean).join(' '),
+    fileA: v.fileA,
+    fileB: v.fileB,
+    pathA: v.pathA || '',
+    pathB: v.pathB || '',
+  }));
 }
 
 function readJarEntries(file) {
@@ -425,14 +448,10 @@ function readJarEntries(file) {
         });
         resolve(entries);
       } catch (err) {
-        console.warn('[debug] JSZip load failed:', file.name, err.message);
         resolve([]); // treat unreadable jars as empty
       }
     };
-    reader.onerror = () => {
-      console.warn('[debug] FileReader error:', file.name);
-      resolve([]);
-    };
+    reader.onerror = () => resolve([]);
     reader.readAsArrayBuffer(file);
   });
 }
@@ -500,7 +519,7 @@ function renderList(results) {
     html += identical.map(r => {
       const folderA = r.pathA ? r.pathA.replace(/\/[^/]+$/, '') : '';
       const folderB = r.pathB ? r.pathB.replace(/\/[^/]+$/, '') : '';
-      return `<tr><td class="id-filename">${r.filename}</td><td class="id-path-a">${folderA}</td><td class="id-path-b">${folderB}</td></tr>`;
+      return `<tr><td class="id-filename">${r.displayName || r.filename}</td><td class="id-path-a">${folderA}</td><td class="id-path-b">${folderB}</td></tr>`;
     }).join('');
     html += '</tbody></table>';
   }
@@ -524,10 +543,10 @@ function buildCard(r, idx, offset) {
   const realIdx = (offset || 0) + idx;
 
   return `
-    <div class="jar-card${highlight}" data-status="${r.status}" data-filename="${r.filename.toLowerCase()}">
+    <div class="jar-card${highlight}" data-status="${r.status}" data-filename="${(r.filterNames || r.filename).toLowerCase()}">
       <div class="jar-card-header" onclick="toggleCard(this)">
         ${badges[r.status]}
-        <span class="name" title="${r.filename}">${r.filename}</span>
+        <span class="name" title="${r.filename}">${r.displayName || r.filename}</span>
         <span class="path-hint" title="${r.pathA || ''}">${pathHint ? pathHint : ''}</span>
       </div>
       <div class="jar-card-body" id="body-${realIdx}">
