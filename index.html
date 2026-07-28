@@ -632,26 +632,39 @@ function applyFilter() {
 function lineDiff(textA, textB) {
   const linesA = (textA || '').split('\n');
   const linesB = (textB || '').split('\n');
-  const freqB = new Map();
+  const freqA = new Map(), freqB = new Map();
+  for (const l of linesA) freqA.set(l, (freqA.get(l) || 0) + 1);
   for (const l of linesB) freqB.set(l, (freqB.get(l) || 0) + 1);
-  const availableB = new Map(freqB);
+  const availableA = new Map(freqA), availableB = new Map(freqB);
   const maxLen = Math.max(linesA.length, linesB.length);
   const result = [];
   for (let i = 0; i < maxLen; i++) {
     const a = i < linesA.length ? linesA[i] : null;
     const b = i < linesB.length ? linesB[i] : null;
     if (a === null) {
-      result.push({ line: i + 1, lineA: '', lineB: b, type: (freqB.get(b) || 0) > 0 || (availableB.get(b) || 0) > 0 ? 'same' : 'added' });
-      if (availableB.get(b) > 0) availableB.set(b, availableB.get(b) - 1);
+      const countInA = freqA.get(b) || 0;
+      result.push({ line: i + 1, lineA: '', lineB: b, type: countInA > 0 && (availableA.get(b) || 0) > 0 ? 'same' : 'added' });
+      if (availableA.get(b) > 0) availableA.set(b, availableA.get(b) - 1);
     } else if (b === null) {
       const countInB = freqB.get(a) || 0;
-      result.push({ line: i + 1, lineA: a, lineB: '', type: countInB > 0 ? 'same' : 'removed' });
+      result.push({ line: i + 1, lineA: a, lineB: '', type: countInB > 0 && (availableB.get(a) || 0) > 0 ? 'same' : 'removed' });
+      if (availableA.get(a) > 0) availableA.set(a, availableA.get(a) - 1);
     } else if (a !== b) {
-      const aExistsInB = (freqB.get(a) || 0) > 0 && (availableB.get(a) || 0) > 0;
-      result.push({ line: i + 1, lineA: a, lineB: b, type: aExistsInB ? 'same' : 'modified' });
-      if (availableB.get(b) > 0) availableB.set(b, availableB.get(b) - 1);
+      const aInB = (freqB.get(a) || 0) > 0 && (availableB.get(a) || 0) > 0;
+      const bInA = (freqA.get(b) || 0) > 0 && (availableA.get(b) || 0) > 0;
+      if (aInB) {
+        result.push({ line: i + 1, lineA: a, lineB: b, type: 'same' });
+        if (availableB.get(a) > 0) availableB.set(a, availableB.get(a) - 1);
+      } else if (bInA) {
+        result.push({ line: i + 1, lineA: a, lineB: b, type: 'same' });
+        if (availableA.get(b) > 0) availableA.set(b, availableA.get(b) - 1);
+      } else {
+        result.push({ line: i + 1, lineA: a, lineB: b, type: 'modified' });
+        if (availableB.get(b) > 0) availableB.set(b, availableB.get(b) - 1);
+      }
     } else {
       result.push({ line: i + 1, lineA: a, lineB: b, type: 'same' });
+      if (availableA.get(a) > 0) availableA.set(a, availableA.get(a) - 1);
       if (availableB.get(b) > 0) availableB.set(b, availableB.get(b) - 1);
     }
   }
