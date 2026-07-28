@@ -622,7 +622,7 @@ function applyFilter() {
     const fn = card.dataset.filename;
     const st = card.dataset.status;
     const matchText = !text || fn.includes(text);
-    const matchStatus = !status || (status === 'different' ? st !== 'identical' : st === status);
+    const matchStatus = !status || st === status;
     card.style.display = (matchText && matchStatus) ? '' : 'none';
     if (matchText && matchStatus) visible++;
   });
