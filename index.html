@@ -153,6 +153,18 @@ footer { text-align: center; padding: 20px; color: var(--text-dim); font-size: 1
 #toast.error { border-color: var(--red); }
 #toast.success { border-color: var(--green); }
 
+/* Scroll-to-top */
+#scroll-top {
+  position: fixed; bottom: 80px; right: 24px; z-index: 998;
+  width: 40px; height: 40px; border-radius: 50%;
+  background: var(--accent); color: #fff; border: none;
+  font-size: 20px; cursor: pointer; opacity: 0; pointer-events: none;
+  transition: opacity .3s, transform .2s; box-shadow: 0 2px 8px rgba(0,0,0,.35);
+  display: flex; align-items: center; justify-content: center;
+}
+#scroll-top.show { opacity: 1; pointer-events: auto; }
+#scroll-top:hover { transform: scale(1.1); }
+
 /* Loading spinner */
 .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .6s linear infinite; vertical-align: middle; margin-right: 6px; }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -264,6 +276,7 @@ footer { text-align: center; padding: 20px; color: var(--text-dim); font-size: 1
 </div>
 
 <div id="toast"></div>
+<button id="scroll-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" title="回到頂部">&#x2191;</button>
 
 <script>
 const state = { filesA: [], filesB: [], results: [], abort: null };
@@ -487,7 +500,7 @@ function renderList(results) {
 
   html += others.map((r, idx) => buildCard(r, idx, identical.length)).join('');
   container.innerHTML = html;
-  document.getElementById('filter-result').textContent = `顯示 ${results.length} 組`;
+  applyFilter();
 }
 
 function buildCard(r, idx, offset) {
@@ -691,6 +704,11 @@ function toggleTheme() {
   btn.textContent = html.classList.contains('light') ? '🌙' : '☀️';
   localStorage.setItem('jar-comp-theme', html.classList.contains('light') ? 'light' : 'dark');
 }
+
+// scroll-to-top visibility
+window.addEventListener('scroll', () => {
+  document.getElementById('scroll-top').classList.toggle('show', window.scrollY > 400);
+}, { passive: true });
 
 // restore saved theme
 (function() {
